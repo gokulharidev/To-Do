@@ -11,7 +11,7 @@
   --color-text-primary: #1F1F1F;
   --color-text-secondary: #7D7D7D;
   --color-text-muted: #B0B0B0;
-  
+
   /* Category Colors */
   --color-meeting: #5B9BD5;
   --color-focus: #9C88FF;
@@ -19,7 +19,7 @@
   --color-break: #70C1B3;
   --color-prep: #F4A261;
   --color-other: #B0B0B0;
-  
+
   /* Typography */
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
@@ -29,25 +29,25 @@
   --font-size-body: 16px;
   --font-size-small: 14px;
   --font-size-badge: 12px;
-  
+
   /* Spacing - 8px Grid */
   --spacing-xs: 8px;
   --spacing-sm: 16px;
   --spacing-md: 24px;
   --spacing-lg: 32px;
   --spacing-xl: 48px;
-  
+
   /* Border Radius */
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-pill: 999px;
-  
+
   /* Shadows */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
-  
+
   /* Transitions */
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
@@ -234,12 +234,35 @@ h3 {
   white-space: nowrap;
 }
 
-.badge-meeting { background: rgba(91, 155, 213, 0.15); color: #2E5C8A; }
-.badge-focus { background: rgba(156, 136, 255, 0.15); color: #6B4FD9; }
-.badge-admin { background: rgba(255, 217, 102, 0.15); color: #B8860B; }
-.badge-break { background: rgba(112, 193, 179, 0.15); color: #3A7A6C; }
-.badge-prep { background: rgba(244, 162, 97, 0.15); color: #C87941; }
-.badge-other { background: rgba(176, 176, 176, 0.15); color: #5A5A5A; }
+.badge-meeting {
+  background: rgba(91, 155, 213, 0.15);
+  color: #2E5C8A;
+}
+
+.badge-focus {
+  background: rgba(156, 136, 255, 0.15);
+  color: #6B4FD9;
+}
+
+.badge-admin {
+  background: rgba(255, 217, 102, 0.15);
+  color: #B8860B;
+}
+
+.badge-break {
+  background: rgba(112, 193, 179, 0.15);
+  color: #3A7A6C;
+}
+
+.badge-prep {
+  background: rgba(244, 162, 97, 0.15);
+  color: #C87941;
+}
+
+.badge-other {
+  background: rgba(176, 176, 176, 0.15);
+  color: #5A5A5A;
+}
 
 /* Calendar Styles */
 .calendar {
@@ -468,8 +491,13 @@ h3 {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .modal {
@@ -489,6 +517,7 @@ h3 {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -523,11 +552,11 @@ h3 {
   .app-container {
     grid-template-columns: 1fr;
   }
-  
+
   .timer-display {
     font-size: 48px;
   }
-  
+
   #app {
     padding: var(--spacing-sm);
   }
@@ -546,7 +575,18 @@ h3 {
   text-align: center;
 }
 
-.mt-sm { margin-top: var(--spacing-sm); }
-.mt-md { margin-top: var(--spacing-md); }
-.mb-sm { margin-bottom: var(--spacing-sm); }
-.mb-md { margin-bottom: var(--spacing-md); }
+.mt-sm {
+  margin-top: var(--spacing-sm);
+}
+
+.mt-md {
+  margin-top: var(--spacing-md);
+}
+
+.mb-sm {
+  margin-bottom: var(--spacing-sm);
+}
+
+.mb-md {
+  margin-bottom: var(--spacing-md);
+}
