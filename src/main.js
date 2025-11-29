@@ -3,8 +3,6 @@ import { router } from './router.js';
 import { Navigation } from './components/navigation.js';
 import { TimePage } from './pages/timePage.js';
 import { CalendarPage } from './pages/calendarPage.js';
-import { TasksPage } from './pages/tasksPage.js';
-import { NotesPage } from './pages/notesPage.js';
 import { taskScheduler } from './services/taskScheduler.js';
 
 class App {
@@ -18,26 +16,18 @@ class App {
       <div id="navigation-container"></div>
       <div id="time-container"></div>
       <div id="calendar-container"></div>
-      <div id="tasks-container"></div>
-      <div id="notes-container"></div>
     `;
 
     // Initialize pages
     const timeContainer = document.querySelector('#time-container');
     const calendarContainer = document.querySelector('#calendar-container');
-    const tasksContainer = document.querySelector('#tasks-container');
-    const notesContainer = document.querySelector('#notes-container');
 
     const timePage = new TimePage(timeContainer);
     const calendarPage = new CalendarPage(calendarContainer);
-    const tasksPage = new TasksPage(tasksContainer);
-    const notesPage = new NotesPage(notesContainer);
 
     // Register pages with router
     router.registerPage('time', timePage);
     router.registerPage('calendar', calendarPage);
-    router.registerPage('tasks', tasksPage);
-    router.registerPage('notes', notesPage);
 
     // Initialize navigation
     const navigationContainer = document.querySelector('#navigation-container');

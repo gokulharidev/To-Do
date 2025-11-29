@@ -6,9 +6,7 @@ export class Navigation {
         this.container = container;
         this.pages = [
             { name: 'time', icon: '⏱️', label: 'Time' },
-            { name: 'calendar', icon: '📅', label: 'Calendar' },
-            { name: 'tasks', icon: '✅', label: 'Tasks' },
-            { name: 'notes', icon: '📝', label: 'Notes' }
+            { name: 'calendar', icon: '📅', label: 'Calendar' }
         ];
 
         this.render();
