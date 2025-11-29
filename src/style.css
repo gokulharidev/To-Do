@@ -969,6 +969,284 @@ body {
 }
 
 /* Bright Controls */
+
+/* Focused Time Page Layout */
+.time-page-layout-focused {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* Center vertically */
+  padding: var(--spacing-xl);
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.time-page-layout-focused .time-center-column {
+  width: 100%;
+  max-width: 1200px;
+  /* Increased max-width for side-by-side */
+  display: flex;
+  flex-direction: row;
+  /* Side by side */
+  align-items: flex-start;
+  gap: var(--spacing-xl);
+}
+
+#smart-timer-container {
+  flex: 1;
+  min-width: 400px;
+}
+
+#insights-container {
+  flex: 1;
+  min-width: 350px;
+}
+
+/* Responsive: Stack on smaller screens */
+@media (max-width: 900px) {
+  .time-page-layout-focused .time-center-column {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  #smart-timer-container,
+  #insights-container {
+    width: 100%;
+    min-width: auto;
+  }
+}
+
+/* Calendar Page Layout */
+.calendar-page-layout {
+  padding: var(--spacing-xl);
+  height: 100vh;
+  overflow-y: auto;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.calendar-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.calendar-title-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.outlook-auth-section {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+}
+
+.user-email {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+#outlook-connect {
+  display: flex;
+  align-items: center;
+  background: #0078D4;
+  /* Microsoft blue */
+  color: white;
+}
+
+#outlook-connect:hover {
+  background: #106EBE;
+}
+
+.calendar-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--spacing-sm);
+}
+
+.calendar-day-header {
+  text-align: center;
+  font-weight: var(--font-weight-medium);
+  padding: var(--spacing-sm);
+}
+
+.calendar-day {
+  aspect-ratio: 1;
+  background: var(--bg-surface);
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  position: relative;
+  transition: all var(--transition-fast);
+}
+
+.calendar-day:hover {
+  background: var(--bg-hover);
+  border-color: var(--primary);
+}
+
+.calendar-day.today {
+  border-color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.05);
+}
+
+.calendar-day.empty {
+  background: transparent;
+  border: none;
+}
+
+.day-number {
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+}
+
+.session-dot {
+  width: 6px;
+  height: 6px;
+  background-color: var(--primary);
+  border-radius: 50%;
+}
+
+.outlook-event-dot {
+  width: 6px;
+  height: 6px;
+  background-color: #0078D4;
+  /* Microsoft blue */
+  border-radius: 50%;
+}
+
+.event-indicators {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+/* Sync Status */
+.sync-status {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-xs);
+}
+
+/* Event Details Modal */
+.event-details-modal {
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.event-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.event-section-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  margin-top: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  color: var(--text-primary);
+}
+
+.event-item {
+  background: var(--bg-surface);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--primary);
+}
+
+.event-item.outlook-event {
+  border-left-color: #0078D4;
+}
+
+.event-time {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.event-title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.event-location {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-xs);
+}
+
+.event-description {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-xs);
+  white-space: pre-wrap;
+}
+
+.event-organizer {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-top: var(--spacing-xs);
+}
+
+.event-meta {
+  display: flex;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
+}
+
+
+
+/* Sticky calendar header */
+.session-logs-modal .logs-calendar-header {
+  position: sticky;
+  top: 56px;
+  /* approximate height of modal header */
+  z-index: 9;
+  background: var(--bg-elevated);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.session-logs-modal .modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-elevated);
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Scrollable list container */
+.session-logs-modal .logs-list-container {
+  max-height: 60vh;
+  /* Adjust as needed */
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+}
+
 .logs-nav-btn {
   color: var(--primary);
   background: var(--bg-surface);
