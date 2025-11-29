@@ -13,6 +13,8 @@ import { breakMode } from '../services/breakMode.js';
 import { FlowSettingsModal } from './flowSettingsModal.js';
 import { getFlowBreakPercent, updateFlowBreakPercent } from '../utils/timerSettings.js';
 import { getAllCategories, addCategory } from '../utils/categoryStorage.js';
+import { youtrackService } from '../services/youtrack.js';
+import { IssueAutocomplete } from './issueAutocomplete.js';
 
 export class SmartTimer {
   constructor(container, onSessionAdded, onOpenLogs) {
@@ -31,6 +33,22 @@ export class SmartTimer {
     this.flowSettingsModal = null;
     this.category = 'Work'; // Default category
     this.categories = getAllCategories();
+    this.selectedIssue = null;
+    this.issueAutocomplete = null;
+
+    // Helper method to escape HTML
+    this.escapeHtml = (text) => {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    };
+
+    // Helper method to escape HTML
+    this.escapeHtml = (text) => {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    };
 
     this.render();
     this.attachEvents();
@@ -74,6 +92,12 @@ export class SmartTimer {
             ${this.categories.map(c => `<option value="${c.name}" ${c.name === this.category ? 'selected' : ''}>${c.name}</option>`).join('')}
             <option value="new">+ Create New Category</option>
           </select>
+          ${this.selectedIssue && this.selectedIssue.assignee ? `
+            <div class="issue-assignee">
+              <span class="assignee-label">Assigned to:</span>
+              <span class="assignee-name">${this.escapeHtml(this.selectedIssue.assignee)}</span>
+            </div>
+          ` : ''}
         </div>
 
         <div class="input-group">
@@ -82,9 +106,12 @@ export class SmartTimer {
             type="text" 
             class="input squircle" 
             id="timer-task-name" 
-            placeholder="Task name..."
+            placeholder="${youtrackService.isAuthenticated() ? 'Type issue ID (e.g., PROJ-123) or search...' : 'Task name...'}"
             value="${this.taskName}"
           />
+          ${youtrackService.isAuthenticated() ? `
+            <small class="text-muted">Start typing to search YouTrack issues</small>
+          ` : ''}
         </div>
 
         <div class="timer-actions">
@@ -194,8 +221,26 @@ export class SmartTimer {
     // Task name input
     const taskInput = this.container.querySelector('#timer-task-name');
     if (taskInput) {
+      // Clean up old autocomplete if it exists
+      if (this.issueAutocomplete) {
+        this.issueAutocomplete.destroy();
+        this.issueAutocomplete = null;
+      }
+
+      // Initialize issue autocomplete if YouTrack is connected
+      if (youtrackService.isAuthenticated()) {
+        this.issueAutocomplete = new IssueAutocomplete(taskInput, (issue) => {
+          this.selectedIssue = issue;
+          this.taskName = taskInput.value;
+        });
+      }
+
       taskInput.addEventListener('input', (e) => {
         this.taskName = e.target.value;
+        // Clear selected issue if user manually edits
+        if (this.selectedIssue && !e.target.value.includes(this.selectedIssue.idReadable)) {
+          this.selectedIssue = null;
+        }
       });
     }
 
@@ -345,6 +390,42 @@ export class SmartTimer {
 
     addSession(session);
 
+    // Send to YouTrack if configured and issue is selected
+    // Uses session's actual start time to ensure correct date in timesheet
+    if (youtrackService.isAuthenticated() && this.selectedIssue && session.workDuration > 0) {
+      const sessionDate = new Date(session.startTime);
+      const dateStr = sessionDate.toLocaleDateString();
+      
+      youtrackService.addWorkItemFromSession(session, this.selectedIssue.id)
+        .then(() => {
+          console.log('Work item sent to YouTrack successfully');
+          // Show success notification with date
+          this.showNotification(`✓ Time logged to ${this.selectedIssue.idReadable} (${dateStr})`, 'success');
+        })
+        .catch((error) => {
+          console.error('Failed to send work item to YouTrack:', error);
+          this.showNotification(`Failed to log time: ${error.message}`, 'error');
+        });
+    } else if (youtrackService.isAuthenticated() && session.workDuration > 0) {
+      // Try to extract issue ID from task name
+      const match = this.taskName.match(/([A-Z]+-\d+)/i);
+      if (match) {
+        const issueId = match[1];
+        const sessionDate = new Date(session.startTime);
+        const dateStr = sessionDate.toLocaleDateString();
+        
+        youtrackService.addWorkItemFromSession(session, issueId)
+          .then(() => {
+            console.log('Work item sent to YouTrack successfully');
+            this.showNotification(`✓ Time logged to ${issueId} (${dateStr})`, 'success');
+          })
+          .catch((error) => {
+            console.error('Failed to send work item to YouTrack:', error);
+            this.showNotification(`Failed to log time: ${error.message}`, 'error');
+          });
+      }
+    }
+
     // Notify parent of new session for instant refresh
     if (this.onSessionAdded) {
       this.onSessionAdded(session);
@@ -443,6 +524,7 @@ export class SmartTimer {
     this.taskName = '';
     this.workDuration = 0;
     this.breaksTaken = 0;
+    this.selectedIssue = null;
     this.render();
     this.attachEvents();
   }
@@ -452,5 +534,31 @@ export class SmartTimer {
     if (display) {
       display.textContent = this.getDisplayTime();
     }
+  }
+
+  showNotification(message, type = 'info') {
+    // Create a simple notification
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 20px;
+      background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+      color: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 10000;
+      animation: slideIn 0.3s ease;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      notification.style.animation = 'slideOut 0.3s ease';
+      setTimeout(() => notification.remove(), 300);
+    }, 3000);
   }
 }
