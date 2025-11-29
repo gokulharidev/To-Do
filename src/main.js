@@ -1,76 +1,66 @@
 import './style.css';
-import { Timer } from './components/timer.js';
-import { Calendar } from './components/calendar.js';
-import { Timeline } from './components/timeline.js';
-import { Modal } from './components/modal.js';
-import { deleteEntry } from './utils/storage.js';
+import { router } from './router.js';
+import { Navigation } from './components/navigation.js';
+import { TimePage } from './pages/timePage.js';
+import { CalendarPage } from './pages/calendarPage.js';
+import { TasksPage } from './pages/tasksPage.js';
+import { NotesPage } from './pages/notesPage.js';
+import { taskScheduler } from './services/taskScheduler.js';
 
 class App {
   constructor() {
-    this.timer = null;
-    this.calendar = null;
-    this.timeline = null;
-    this.modal = null;
-
     this.init();
   }
 
   init() {
+    // Set up main app structure
     document.querySelector('#app').innerHTML = `
-      <h1>⏱️ Time Tracker</h1>
-      <div class="app-container">
-        <div class="left-panel">
-          <div id="timer-container"></div>
-          <div id="calendar-container"></div>
-        </div>
-        <div class="right-panel">
-          <div id="timeline-container"></div>
-        </div>
-      </div>
+      <div id="navigation-container"></div>
+      <div id="time-container"></div>
+      <div id="calendar-container"></div>
+      <div id="tasks-container"></div>
+      <div id="notes-container"></div>
     `;
 
-    this.initComponents();
-  }
-
-  initComponents() {
-    const timerContainer = document.querySelector('#timer-container');
-    this.timer = new Timer(timerContainer, (entry) => {
-      this.timeline.refresh();
-    });
-
+    // Initialize pages
+    const timeContainer = document.querySelector('#time-container');
     const calendarContainer = document.querySelector('#calendar-container');
-    this.calendar = new Calendar(calendarContainer, (date) => {
-      this.timeline.setDate(date);
+    const tasksContainer = document.querySelector('#tasks-container');
+    const notesContainer = document.querySelector('#notes-container');
+
+    const timePage = new TimePage(timeContainer);
+    const calendarPage = new CalendarPage(calendarContainer);
+    const tasksPage = new TasksPage(tasksContainer);
+    const notesPage = new NotesPage(notesContainer);
+
+    // Register pages with router
+    router.registerPage('time', timePage);
+    router.registerPage('calendar', calendarPage);
+    router.registerPage('tasks', tasksPage);
+    router.registerPage('notes', notesPage);
+
+    // Initialize navigation
+    const navigationContainer = document.querySelector('#navigation-container');
+    new Navigation(navigationContainer);
+
+    // Initialize router with default page
+    router.init('time');
+
+    // Start task scheduler
+    taskScheduler.start((task) => {
+      // Navigate to time page if not already there
+      router.navigateTo('time');
+      // Start timer with task
+      timePage.startTask(task);
     });
-
-    const timelineContainer = document.querySelector('#timeline-container');
-    this.timeline = new Timeline(
-      timelineContainer,
-      (id) => this.modal.open(id),
-      (id) => {
-        if (deleteEntry(id)) {
-          this.timeline.refresh();
-        }
-      }
-    );
-
-    this.modal = new Modal(
-      () => this.timeline.refresh(),
-      () => { }
-    );
-
-    this.timeline.setDate(this.calendar.getSelectedDate());
   }
 }
 
 // Initialize app
-let app;
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    app = new App();
-    window.app = app;
+    new App();
   });
 } else {
-  app = new App();
-  window.app = app;
+  new App();
 }
