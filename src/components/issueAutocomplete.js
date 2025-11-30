@@ -9,7 +9,7 @@ export class IssueAutocomplete {
         this.selectedIssue = null;
         this.searchTimeout = null;
         this.isOpen = false;
-        
+
         this.init();
     }
 
@@ -18,11 +18,11 @@ export class IssueAutocomplete {
         this.dropdown = document.createElement('div');
         this.dropdown.className = 'issue-autocomplete-dropdown';
         this.dropdown.style.display = 'none';
-        
+
         // Insert after input element
         this.inputElement.parentElement.style.position = 'relative';
         this.inputElement.parentElement.appendChild(this.dropdown);
-        
+
         this.attachEvents();
     }
 
@@ -64,7 +64,7 @@ export class IssueAutocomplete {
 
     async handleInput(query) {
         clearTimeout(this.searchTimeout);
-        
+
         if (query.length < 2) {
             this.close();
             this.selectedIssue = null;
@@ -89,7 +89,7 @@ export class IssueAutocomplete {
 
             // Search issues - try to find by ID first, then by text
             let issues = [];
-            
+
             // If query looks like an issue ID (e.g., "PROJ-123"), search for it
             if (/^[A-Z]+-\d+$/i.test(query.trim())) {
                 try {
@@ -151,6 +151,7 @@ export class IssueAutocomplete {
                     data-issue-id="${issue.id}"
                     data-issue-readable="${issue.idReadable}"
                     data-issue-summary="${this.escapeHtml(issue.summary)}"
+                    data-project-id="${issue.project && issue.project.id ? issue.project.id : ''}"
                 >
                     <div class="issue-id">${issue.idReadable}</div>
                     <div class="issue-summary">${this.escapeHtml(issue.summary)}</div>
@@ -178,16 +179,18 @@ export class IssueAutocomplete {
         const issueId = itemElement.dataset.issueId;
         const issueReadable = itemElement.dataset.issueReadable;
         const issueSummary = itemElement.dataset.issueSummary;
+        const projectId = itemElement.dataset.projectId;
 
         this.selectedIssue = {
             id: issueId,
             idReadable: issueReadable,
-            summary: issueSummary
+            summary: issueSummary,
+            project: { id: projectId }
         };
 
         // Update input value
         this.inputElement.value = `${issueReadable}: ${issueSummary}`;
-        
+
         this.close();
 
         if (this.onSelect) {
@@ -205,7 +208,7 @@ export class IssueAutocomplete {
     navigateDown() {
         const items = this.dropdown.querySelectorAll('.issue-autocomplete-item');
         const current = this.dropdown.querySelector('.issue-autocomplete-item.highlighted');
-        
+
         if (items.length === 0) return;
 
         if (!current) {
@@ -221,7 +224,7 @@ export class IssueAutocomplete {
     navigateUp() {
         const items = this.dropdown.querySelectorAll('.issue-autocomplete-item');
         const current = this.dropdown.querySelector('.issue-autocomplete-item.highlighted');
-        
+
         if (items.length === 0) return;
 
         if (!current) {

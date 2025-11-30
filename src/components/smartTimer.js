@@ -35,13 +35,10 @@ export class SmartTimer {
     this.categories = getAllCategories();
     this.selectedIssue = null;
     this.issueAutocomplete = null;
-
-    // Helper method to escape HTML
-    this.escapeHtml = (text) => {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    };
+    this.description = ''; // New property for description
+    this.customFields = []; // New property for custom fields
+    this.workItemAttributes = []; // Definitions from project settings
+    this.attributeValues = {}; // User selected values { attrId: value }
 
     // Helper method to escape HTML
     this.escapeHtml = (text) => {
@@ -113,6 +110,54 @@ export class SmartTimer {
             <small class="text-muted">Start typing to search YouTrack issues</small>
           ` : ''}
         </div>
+
+        <div class="input-group">
+          <label class="input-label">Description (optional)</label>
+          <textarea 
+            class="input squircle" 
+            id="timer-description" 
+            placeholder="Add more details about your work..."
+          >${this.description}</textarea>
+        </div>
+
+        ${youtrackService.isAuthenticated() && this.selectedIssue && this.customFields.length > 0 ? `
+          <div class="input-group">
+            <label class="input-label">Custom Fields</label>
+            ${this.customFields.map(field => `
+              <div class="custom-field">
+                <label>${this.escapeHtml(field.name)}:</label>
+                <input type="text" class="input squircle custom-field-input" data-field-id="${field.id}" value="${this.escapeHtml(field.value || '')}" />
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        ${this.workItemAttributes.length > 0 ? `
+          <div class="input-group">
+            <label class="input-label">Work Item Attributes</label>
+            ${this.workItemAttributes.map(attr => `
+              <div class="custom-field">
+                <label>${this.escapeHtml(attr.name)}:</label>
+                ${attr.values && attr.values.length > 0 ? `
+                  <select class="input squircle work-item-attribute-input" data-attr-id="${attr.id}">
+                    <option value="">Select ${this.escapeHtml(attr.name)}</option>
+                    ${attr.values.map(val => `
+                      <option value="${val.id}" ${this.attributeValues[attr.id] && this.attributeValues[attr.id].id === val.id ? 'selected' : ''}>
+                        ${this.escapeHtml(val.name)}
+                      </option>
+                    `).join('')}
+                  </select>
+                ` : `
+                  <input type="text" 
+                         class="input squircle work-item-attribute-input" 
+                         data-attr-id="${attr.id}" 
+                         value="${this.escapeHtml(this.attributeValues[attr.id] || '')}" 
+                  />
+                `}
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
 
         <div class="timer-actions">
           ${this.getActionButtons()}
@@ -229,9 +274,40 @@ export class SmartTimer {
 
       // Initialize issue autocomplete if YouTrack is connected
       if (youtrackService.isAuthenticated()) {
-        this.issueAutocomplete = new IssueAutocomplete(taskInput, (issue) => {
+        this.issueAutocomplete = new IssueAutocomplete(taskInput, async (issue) => {
           this.selectedIssue = issue;
           this.taskName = taskInput.value;
+          // Fetch custom fields and work item attributes
+          if (issue) {
+            try {
+              const [fields, attributes] = await Promise.all([
+                youtrackService.getIssueCustomFields(issue.id),
+                issue.project && issue.project.id ? youtrackService.getWorkItemAttributes(issue.project.id) : []
+              ]);
+              this.customFields = fields;
+              this.workItemAttributes = attributes;
+
+              // Set defaults for attributes if available
+              this.attributeValues = {};
+              this.workItemAttributes.forEach(attr => {
+                if (attr.values && attr.values.length > 0) {
+                  // Optionally select first value or specific default
+                  // this.attributeValues[attr.id] = { id: attr.values[0].id };
+                }
+              });
+
+            } catch (error) {
+              console.error('Failed to fetch issue details:', error);
+              this.customFields = [];
+              this.workItemAttributes = [];
+            }
+          } else {
+            this.customFields = [];
+            this.workItemAttributes = [];
+            this.attributeValues = {};
+          }
+          this.render();
+          this.attachEvents();
         });
       }
 
@@ -240,9 +316,61 @@ export class SmartTimer {
         // Clear selected issue if user manually edits
         if (this.selectedIssue && !e.target.value.includes(this.selectedIssue.idReadable)) {
           this.selectedIssue = null;
+          this.customFields = [];
+          this.workItemAttributes = [];
+          this.attributeValues = {};
+          this.render();
+          this.attachEvents();
         }
       });
     }
+
+    // Description textarea
+    const descriptionTextarea = this.container.querySelector('#timer-description');
+    if (descriptionTextarea) {
+      descriptionTextarea.addEventListener('input', (e) => {
+        this.description = e.target.value;
+      });
+    }
+
+    // Custom fields inputs
+    const customFieldInputs = this.container.querySelectorAll('.custom-field-input');
+    customFieldInputs.forEach(input => {
+      input.addEventListener('input', (e) => {
+        const fieldId = e.target.dataset.fieldId;
+        const field = this.customFields.find(f => f.id === fieldId);
+        if (field) {
+          field.value = e.target.value;
+        }
+      });
+    });
+
+    // Work Item Attribute inputs
+    const attributeInputs = this.container.querySelectorAll('.work-item-attribute-input');
+    attributeInputs.forEach(input => {
+      input.addEventListener('change', (e) => {
+        const attrId = e.target.dataset.attrId;
+        const value = e.target.value;
+        const attr = this.workItemAttributes.find(a => a.id === attrId);
+
+        if (attr) {
+          if (attr.values && attr.values.length > 0) {
+            // For select inputs, store as object { id: value }
+            this.attributeValues[attrId] = value ? { id: value } : null;
+          } else {
+            // For text inputs
+            this.attributeValues[attrId] = value;
+          }
+        }
+      });
+      // Also handle input for text fields
+      if (input.tagName === 'INPUT') {
+        input.addEventListener('input', (e) => {
+          const attrId = e.target.dataset.attrId;
+          this.attributeValues[attrId] = e.target.value;
+        });
+      }
+    });
 
     // Category select
     const categorySelect = this.container.querySelector('#timer-category');
@@ -385,7 +513,12 @@ export class SmartTimer {
       workDuration: this.workDuration + this.elapsed,
       breaksTaken: this.breaksTaken,
       startTime: this.startTime.toISOString(),
-      endTime: new Date().toISOString()
+      endTime: new Date().toISOString(),
+      description: this.description, // Include description
+      customFields: this.customFields, // Include custom fields
+      workItemAttributes: Object.entries(this.attributeValues)
+        .filter(([_, val]) => val !== null && val !== '')
+        .map(([id, value]) => ({ id, value }))
     });
 
     addSession(session);
@@ -395,7 +528,7 @@ export class SmartTimer {
     if (youtrackService.isAuthenticated() && this.selectedIssue && session.workDuration > 0) {
       const sessionDate = new Date(session.startTime);
       const dateStr = sessionDate.toLocaleDateString();
-      
+
       youtrackService.addWorkItemFromSession(session, this.selectedIssue.id)
         .then(() => {
           console.log('Work item sent to YouTrack successfully');
@@ -413,7 +546,7 @@ export class SmartTimer {
         const issueId = match[1];
         const sessionDate = new Date(session.startTime);
         const dateStr = sessionDate.toLocaleDateString();
-        
+
         youtrackService.addWorkItemFromSession(session, issueId)
           .then(() => {
             console.log('Work item sent to YouTrack successfully');
@@ -525,6 +658,10 @@ export class SmartTimer {
     this.workDuration = 0;
     this.breaksTaken = 0;
     this.selectedIssue = null;
+    this.description = ''; // Clear description
+    this.customFields = []; // Clear custom fields
+    this.workItemAttributes = [];
+    this.attributeValues = {};
     this.render();
     this.attachEvents();
   }
@@ -553,9 +690,9 @@ export class SmartTimer {
       z-index: 10000;
       animation: slideIn 0.3s ease;
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
       notification.style.animation = 'slideOut 0.3s ease';
       setTimeout(() => notification.remove(), 300);

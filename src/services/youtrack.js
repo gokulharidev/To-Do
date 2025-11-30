@@ -4,10 +4,12 @@ export class YouTrackService {
         this.apiUrl = 'https://youtrack24.onedatasoftware.com';
         this.token = 'perm-R29rdWxoYXJp.NDYtMTM=.lYrz3UoU4JC6zRhAIyvEOEmvYWcZTS';
         this.isConfigured = true;
-        
+
         // Save to localStorage
-        localStorage.setItem('youtrack_api_url', this.apiUrl);
-        localStorage.setItem('youtrack_token', this.token);
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('youtrack_api_url', this.apiUrl);
+            localStorage.setItem('youtrack_token', this.token);
+        }
     }
 
     /**
@@ -63,7 +65,7 @@ export class YouTrackService {
         }
 
         try {
-            const response = await fetch(`${this.apiUrl}/api/issues/${issueId}?fields=id,idReadable,summary,project(name),assignee(name)`, {
+            const response = await fetch(`${this.apiUrl}/api/issues/${issueId}?fields=id,idReadable,summary,project(id,name),assignee(name),customFields(id,name,value)`, {
                 headers: this.getAuthHeaders()
             });
 
@@ -75,6 +77,45 @@ export class YouTrackService {
         } catch (error) {
             console.error('Error fetching issue:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Get custom fields for an issue
+     * @param {string} issueId 
+     */
+    async getIssueCustomFields(issueId) {
+        const issue = await this.getIssue(issueId);
+        return issue.customFields || [];
+    }
+
+    /**
+     * Get work item attributes for a project
+     * @param {string} projectId 
+     */
+    async getWorkItemAttributes(projectId) {
+        if (!this.isAuthenticated()) {
+            throw new Error('YouTrack is not configured');
+        }
+
+        try {
+            // Try to fetch project-specific time tracking settings
+            // Note: The endpoint might vary based on YouTrack version. 
+            // We'll try the standard one for project time tracking settings.
+            const response = await fetch(
+                `${this.apiUrl}/api/admin/projects/${projectId}/timeTrackingSettings/workItemAttributes?fields=id,name,values(id,name)`,
+                { headers: this.getAuthHeaders() }
+            );
+
+            if (!response.ok) {
+                console.warn(`Failed to fetch work item attributes for project ${projectId}: ${response.status}`);
+                return [];
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching work item attributes:', error);
+            return [];
         }
     }
 
@@ -91,7 +132,7 @@ export class YouTrackService {
         try {
             const encodedQuery = encodeURIComponent(query);
             const response = await fetch(
-                `${this.apiUrl}/api/issues?query=${encodedQuery}&fields=id,summary,project(name),numberInProject,idReadable,assignee(name)&$top=${limit}`,
+                `${this.apiUrl}/api/issues?query=${encodedQuery}&fields=id,summary,project(id,name),numberInProject,idReadable,assignee(name)&$top=${limit}`,
                 {
                     headers: this.getAuthHeaders()
                 }
@@ -106,7 +147,7 @@ export class YouTrackService {
                 id: issue.id,
                 idReadable: issue.idReadable || issue.id,
                 summary: issue.summary || '',
-                project: issue.project?.name || '',
+                project: issue.project || { name: '' },
                 numberInProject: issue.numberInProject || '',
                 assignee: issue.assignee?.name || null
             }));
@@ -203,28 +244,62 @@ export class YouTrackService {
 
         // Convert workDuration from seconds to minutes
         const durationMinutes = Math.round(session.workDuration / 60);
-        
+
         if (durationMinutes === 0) {
             throw new Error('Work duration is 0 minutes');
         }
 
         // Use the session's actual start time to ensure correct date in timesheet
         const workDate = new Date(session.startTime);
-        
+
         // Validate the date from session
         if (isNaN(workDate.getTime())) {
             throw new Error(`Invalid session start time: ${session.startTime}`);
         }
 
-        const description = session.taskName || `Work tracked from focus timer`;
+        const description = session.description || session.taskName || `Work tracked from focus timer`;
+        const workItemAttributes = session.workItemAttributes || []; // Array of { id, value: { id } } or similar
 
-        // Log the date being used for debugging
-        console.log(`Session date: ${workDate.toISOString()}, Date: ${workDate.toLocaleDateString()}, Time: ${workDate.toLocaleTimeString()}`);
+        // YouTrack work item format
+        const workItem = {
+            duration: {
+                presentation: `${durationMinutes}m`
+            },
+            date: workDate.getTime(),
+            description: description,
+            attributes: workItemAttributes.map(attr => ({
+                id: attr.id,
+                value: attr.value
+            }))
+        };
 
-        return await this.addWorkItem(issueId, durationMinutes, description, workDate);
+        console.log(`Logging work item for date: ${workDate.toISOString()} (${workDate.toLocaleDateString()})`);
+        console.log('Work Item Payload:', JSON.stringify(workItem, null, 2));
+
+        try {
+            const response = await fetch(
+                `${this.apiUrl}/api/issues/${issueId}/timeTracking/workItems`,
+                {
+                    method: 'POST',
+                    headers: this.getAuthHeaders(),
+                    body: JSON.stringify(workItem)
+                }
+            );
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to add work item: ${response.status} ${response.statusText}. ${errorText}`);
+            }
+
+            const result = await response.json();
+            console.log('Work item added successfully:', result);
+            return result;
+        } catch (error) {
+            console.error('Error adding work item:', error);
+            throw error;
+        }
     }
 }
 
 // Singleton instance
 export const youtrackService = new YouTrackService();
-

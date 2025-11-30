@@ -59,7 +59,10 @@ export function createSession({
     breaksTaken = 0,
     startTime = null,
     endTime = null,
-    category = 'Work' // Default category
+    category = 'Work', // Default category
+    description = '',          // new – optional description
+    customFields = [],         // new – array of { id, value }
+    workItemAttributes = []    // new – array of { id, value }
 }) {
     return {
         id: crypto.randomUUID(),
@@ -68,6 +71,9 @@ export function createSession({
         category,
         workDuration,
         breaksTaken,
+        description,
+        customFields,
+        workItemAttributes,
         startTime: startTime || new Date().toISOString(),
         endTime: endTime || new Date().toISOString(),
         createdAt: new Date().toISOString()
