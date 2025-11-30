@@ -12,7 +12,6 @@ import { addSession } from '../utils/sessionStorage.js';
 import { breakMode } from '../services/breakMode.js';
 import { FlowSettingsModal } from './flowSettingsModal.js';
 import { getFlowBreakPercent, updateFlowBreakPercent } from '../utils/timerSettings.js';
-import { getAllCategories, addCategory } from '../utils/categoryStorage.js';
 import { youtrackService } from '../services/youtrack.js';
 import { IssueAutocomplete } from './issueAutocomplete.js';
 
@@ -31,14 +30,14 @@ export class SmartTimer {
     this.breaksTaken = 0;
     this.flowBreakPercent = getFlowBreakPercent();
     this.flowSettingsModal = null;
-    this.category = 'Work'; // Default category
-    this.categories = getAllCategories();
+    this.workItemType = null; // Selected work item type (Activity, Development, etc.)
+    this.workItemTypes = []; // Available work item types from project
     this.selectedIssue = null;
     this.issueAutocomplete = null;
-    this.description = ''; // New property for description
-    this.customFields = []; // New property for custom fields
-    this.workItemAttributes = []; // Definitions from project settings
-    this.attributeValues = {}; // User selected values { attrId: value }
+    this.description = '';
+    this.workItemAttributes = []; // All work item attributes for the issue
+    this.billabilityAttribute = null; // Billability attribute definition with values
+    this.selectedBillability = null; // Selected billability value { id, name }
 
     // Helper method to escape HTML
     this.escapeHtml = (text) => {
@@ -55,7 +54,15 @@ export class SmartTimer {
     this.container.innerHTML = `
       <div class="card smart-timer-card">
         <div class="timer-header">
-          <h2>Focus Timer</h2>
+          <div class="timer-title-section">
+            <h2>Timesheet Logger</h2>
+            ${youtrackService.isAuthenticated() ? `
+              <span class="youtrack-status connected">
+                <span class="status-dot"></span>
+                YouTrack Connected
+              </span>
+            ` : ''}
+          </div>
           <div class="mode-switcher">
             <button 
               class="mode-btn ${this.mode === TIMER_MODES.TRADITIONAL ? 'active' : ''}" 
@@ -84,10 +91,10 @@ export class SmartTimer {
         ${this.mode === TIMER_MODES.FLOW && this.state === TIMER_STATES.IDLE ? this.getFlowSettings() : ''}
 
         <div class="input-group">
-          <label class="input-label">Category</label>
-          <select class="input squircle" id="timer-category">
-            ${this.categories.map(c => `<option value="${c.name}" ${c.name === this.category ? 'selected' : ''}>${c.name}</option>`).join('')}
-            <option value="new">+ Create New Category</option>
+          <label class="input-label">Type</label>
+          <select class="input squircle" id="timer-type" ${!this.selectedIssue || this.workItemTypes.length === 0 ? 'disabled' : ''}>
+            <option value="">${!this.selectedIssue ? 'Select an issue first' : this.workItemTypes.length === 0 ? 'Loading types...' : 'Select work type'}</option>
+            ${this.workItemTypes.map(type => `<option value="${type.id}" ${this.workItemType && this.workItemType.id === type.id ? 'selected' : ''}>${this.escapeHtml(type.name)}</option>`).join('')}
           </select>
           ${this.selectedIssue && this.selectedIssue.assignee ? `
             <div class="issue-assignee">
@@ -98,7 +105,7 @@ export class SmartTimer {
         </div>
 
         <div class="input-group">
-          <label class="input-label">What are you working on?</label>
+          <label class="input-label">Issue / Task Name</label>
           <input 
             type="text" 
             class="input squircle" 
@@ -112,50 +119,22 @@ export class SmartTimer {
         </div>
 
         <div class="input-group">
-          <label class="input-label">Description (optional)</label>
+          <label class="input-label">Work Description</label>
           <textarea 
             class="input squircle" 
             id="timer-description" 
-            placeholder="Add more details about your work..."
+            placeholder="Describe what you worked on (logged to YouTrack)..."
+            rows="3"
           >${this.description}</textarea>
         </div>
 
-        ${youtrackService.isAuthenticated() && this.selectedIssue && this.customFields.length > 0 ? `
+        ${this.billabilityAttribute && this.billabilityAttribute.values && this.billabilityAttribute.values.length > 0 ? `
           <div class="input-group">
-            <label class="input-label">Custom Fields</label>
-            ${this.customFields.map(field => `
-              <div class="custom-field">
-                <label>${this.escapeHtml(field.name)}:</label>
-                <input type="text" class="input squircle custom-field-input" data-field-id="${field.id}" value="${this.escapeHtml(field.value || '')}" />
-              </div>
-            `).join('')}
-          </div>
-        ` : ''}
-
-        ${this.workItemAttributes.length > 0 ? `
-          <div class="input-group">
-            <label class="input-label">Work Item Attributes</label>
-            ${this.workItemAttributes.map(attr => `
-              <div class="custom-field">
-                <label>${this.escapeHtml(attr.name)}:</label>
-                ${attr.values && attr.values.length > 0 ? `
-                  <select class="input squircle work-item-attribute-input" data-attr-id="${attr.id}">
-                    <option value="">Select ${this.escapeHtml(attr.name)}</option>
-                    ${attr.values.map(val => `
-                      <option value="${val.id}" ${this.attributeValues[attr.id] && this.attributeValues[attr.id].id === val.id ? 'selected' : ''}>
-                        ${this.escapeHtml(val.name)}
-                      </option>
-                    `).join('')}
-                  </select>
-                ` : `
-                  <input type="text" 
-                         class="input squircle work-item-attribute-input" 
-                         data-attr-id="${attr.id}" 
-                         value="${this.escapeHtml(this.attributeValues[attr.id] || '')}" 
-                  />
-                `}
-              </div>
-            `).join('')}
+            <label class="input-label">Billability</label>
+            <select class="input squircle" id="timer-billability" ${!this.selectedIssue ? 'disabled' : ''}>
+              <option value="">${!this.selectedIssue ? 'Select an issue first' : 'Select billability'}</option>
+              ${this.billabilityAttribute.values.map(val => `<option value="${val.id}" ${this.selectedBillability && this.selectedBillability.id === val.id ? 'selected' : ''}>${this.escapeHtml(val.name)}</option>`).join('')}
+            </select>
           </div>
         ` : ''}
 
@@ -188,11 +167,11 @@ export class SmartTimer {
     if (this.state === TIMER_STATES.IDLE) {
       return `
         <button class="btn btn-primary squircle" id="start-timer-btn">
-          ▶ Start Focus Session
+          ▶ Start Work Session
         </button>
         <div class="timer-secondary-actions">
           <button class="btn btn-text squircle-sm" id="open-logs-btn">
-            Time Logs 📝
+            View Timesheet 📝
           </button>
         </div>
       `;
@@ -277,34 +256,46 @@ export class SmartTimer {
         this.issueAutocomplete = new IssueAutocomplete(taskInput, async (issue) => {
           this.selectedIssue = issue;
           this.taskName = taskInput.value;
-          // Fetch custom fields and work item attributes
+          // Fetch work item types and attributes for timesheet
           if (issue) {
             try {
-              const [fields, attributes] = await Promise.all([
-                youtrackService.getIssueCustomFields(issue.id),
-                issue.project && issue.project.id ? youtrackService.getWorkItemAttributes(issue.project.id) : []
+              const [workItemTypes, attributes] = await Promise.all([
+                issue.project && issue.project.id 
+                  ? youtrackService.getWorkItemTypes(issue.project.id)
+                  : [],
+                youtrackService.getWorkItemAttributesForIssue(issue.id)
               ]);
-              this.customFields = fields;
+              
+              console.log('Work item types loaded:', workItemTypes.length, workItemTypes);
+              console.log('Work item attributes loaded:', attributes.length, attributes);
+              
+              this.workItemTypes = workItemTypes;
               this.workItemAttributes = attributes;
-
-              // Set defaults for attributes if available
-              this.attributeValues = {};
-              this.workItemAttributes.forEach(attr => {
-                if (attr.values && attr.values.length > 0) {
-                  // Optionally select first value or specific default
-                  // this.attributeValues[attr.id] = { id: attr.values[0].id };
+              
+              // Find billability attribute
+              this.billabilityAttribute = attributes.find(attr => attr.name === 'Billability');
+              if (this.billabilityAttribute) {
+                console.log('Billability attribute found:', this.billabilityAttribute);
+                // Default to "Billable" if available
+                const billableValue = this.billabilityAttribute.values?.find(v => v.name === 'Billable');
+                if (billableValue) {
+                  this.selectedBillability = billableValue;
                 }
-              });
+              }
 
             } catch (error) {
-              console.error('Failed to fetch issue details:', error);
-              this.customFields = [];
+              console.error('Failed to fetch work item details:', error);
+              this.workItemTypes = [];
+              this.workItemType = null;
               this.workItemAttributes = [];
+              this.billabilityAttribute = null;
             }
           } else {
-            this.customFields = [];
+            this.workItemTypes = [];
+            this.workItemType = null;
             this.workItemAttributes = [];
-            this.attributeValues = {};
+            this.billabilityAttribute = null;
+            this.selectedBillability = null;
           }
           this.render();
           this.attachEvents();
@@ -316,9 +307,8 @@ export class SmartTimer {
         // Clear selected issue if user manually edits
         if (this.selectedIssue && !e.target.value.includes(this.selectedIssue.idReadable)) {
           this.selectedIssue = null;
-          this.customFields = [];
-          this.workItemAttributes = [];
-          this.attributeValues = {};
+          this.workItemType = null;
+          this.workItemTypes = [];
           this.render();
           this.attachEvents();
         }
@@ -333,72 +323,29 @@ export class SmartTimer {
       });
     }
 
-    // Custom fields inputs
-    const customFieldInputs = this.container.querySelectorAll('.custom-field-input');
-    customFieldInputs.forEach(input => {
-      input.addEventListener('input', (e) => {
-        const fieldId = e.target.dataset.fieldId;
-        const field = this.customFields.find(f => f.id === fieldId);
-        if (field) {
-          field.value = e.target.value;
-        }
-      });
-    });
-
-    // Work Item Attribute inputs
-    const attributeInputs = this.container.querySelectorAll('.work-item-attribute-input');
-    attributeInputs.forEach(input => {
-      input.addEventListener('change', (e) => {
-        const attrId = e.target.dataset.attrId;
-        const value = e.target.value;
-        const attr = this.workItemAttributes.find(a => a.id === attrId);
-
-        if (attr) {
-          if (attr.values && attr.values.length > 0) {
-            // For select inputs, store as object { id: value }
-            this.attributeValues[attrId] = value ? { id: value } : null;
-          } else {
-            // For text inputs
-            this.attributeValues[attrId] = value;
-          }
-        }
-      });
-      // Also handle input for text fields
-      if (input.tagName === 'INPUT') {
-        input.addEventListener('input', (e) => {
-          const attrId = e.target.dataset.attrId;
-          this.attributeValues[attrId] = e.target.value;
-        });
-      }
-    });
-
-    // Category select
-    const categorySelect = this.container.querySelector('#timer-category');
-    if (categorySelect) {
-      categorySelect.addEventListener('change', (e) => {
-        const value = e.target.value;
-        if (value === 'new') {
-          const newName = prompt('Enter new category name:');
-          if (newName && newName.trim()) {
-            try {
-              addCategory(newName);
-              this.categories = getAllCategories();
-              this.category = newName.trim();
-              this.render();
-              this.attachEvents();
-            } catch (err) {
-              alert(err.message);
-              // Reset to previous category
-              this.render();
-              this.attachEvents();
-            }
-          } else {
-            // Reset to previous category if cancelled
-            this.render();
-            this.attachEvents();
-          }
+    // Billability dropdown
+    const billabilitySelect = this.container.querySelector('#timer-billability');
+    if (billabilitySelect) {
+      billabilitySelect.addEventListener('change', (e) => {
+        const selectedId = e.target.value;
+        if (selectedId && this.billabilityAttribute) {
+          this.selectedBillability = this.billabilityAttribute.values.find(v => v.id === selectedId) || null;
         } else {
-          this.category = value;
+          this.selectedBillability = null;
+        }
+      });
+    }
+
+    // Type select (work item type)
+    const typeSelect = this.container.querySelector('#timer-type');
+    if (typeSelect) {
+      typeSelect.addEventListener('change', (e) => {
+        const value = e.target.value;
+        if (value) {
+          const selectedTypeObj = this.workItemTypes.find(t => t.id === value);
+          this.workItemType = selectedTypeObj || null;
+        } else {
+          this.workItemType = null;
         }
       });
     }
@@ -509,16 +456,13 @@ export class SmartTimer {
     const session = createSession({
       taskName: this.taskName,
       mode: this.mode,
-      category: this.category,
       workDuration: this.workDuration + this.elapsed,
       breaksTaken: this.breaksTaken,
       startTime: this.startTime.toISOString(),
       endTime: new Date().toISOString(),
-      description: this.description, // Include description
-      customFields: this.customFields, // Include custom fields
-      workItemAttributes: Object.entries(this.attributeValues)
-        .filter(([_, val]) => val !== null && val !== '')
-        .map(([id, value]) => ({ id, value }))
+      description: this.description,
+      workItemType: this.workItemType,
+      billabilityValue: this.selectedBillability // Billability attribute value
     });
 
     addSession(session);
@@ -529,11 +473,12 @@ export class SmartTimer {
       const sessionDate = new Date(session.startTime);
       const dateStr = sessionDate.toLocaleDateString();
 
+      // Log the work item with type
       youtrackService.addWorkItemFromSession(session, this.selectedIssue.id)
         .then(() => {
           console.log('Work item sent to YouTrack successfully');
-          // Show success notification with date
-          this.showNotification(`✓ Time logged to ${this.selectedIssue.idReadable} (${dateStr})`, 'success');
+          const typeInfo = this.workItemType ? ` (Type: ${this.workItemType.name})` : '';
+          this.showNotification(`✓ Time logged to ${this.selectedIssue.idReadable} (${dateStr})${typeInfo}`, 'success');
         })
         .catch((error) => {
           console.error('Failed to send work item to YouTrack:', error);
@@ -658,8 +603,9 @@ export class SmartTimer {
     this.workDuration = 0;
     this.breaksTaken = 0;
     this.selectedIssue = null;
-    this.description = ''; // Clear description
-    this.customFields = []; // Clear custom fields
+    this.workItemType = null;
+    this.workItemTypes = [];
+    this.description = '';
     this.workItemAttributes = [];
     this.attributeValues = {};
     this.render();

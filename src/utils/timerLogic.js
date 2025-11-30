@@ -59,21 +59,19 @@ export function createSession({
     breaksTaken = 0,
     startTime = null,
     endTime = null,
-    category = 'Work', // Default category
-    description = '',          // new – optional description
-    customFields = [],         // new – array of { id, value }
-    workItemAttributes = []    // new – array of { id, value }
+    description = '',
+    workItemType = null,       // Work item type: { id, name } (Activity, Development, etc.)
+    billabilityValue = null    // Billability attribute value: { id, name }
 }) {
     return {
         id: crypto.randomUUID(),
         taskName,
         mode,
-        category,
         workDuration,
         breaksTaken,
         description,
-        customFields,
-        workItemAttributes,
+        workItemType,
+        billabilityValue,
         startTime: startTime || new Date().toISOString(),
         endTime: endTime || new Date().toISOString(),
         createdAt: new Date().toISOString()

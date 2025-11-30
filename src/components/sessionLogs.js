@@ -110,16 +110,26 @@ export class SessionLogs {
   renderSessionItem(session) {
     const startTime = new Date(session.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     const endTime = new Date(session.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    
+    // Check if session has YouTrack issue info
+    const hasYouTrackSync = session.taskName && session.taskName.match(/([A-Z]+-\d+)/i);
+    const issueMatch = hasYouTrackSync ? session.taskName.match(/([A-Z]+-\d+)/i) : null;
 
     return `
       <div class="log-entry squircle-sm">
         <div class="log-info">
-          <div class="log-task-name">${session.taskName || 'Untitled Task'}</div>
+          <div class="log-task-name">
+            ${session.taskName || 'Untitled Task'}
+            ${hasYouTrackSync ? '<span class="youtrack-synced-badge" title="Synced to YouTrack">📤</span>' : ''}
+            ${session.billabilityValue && session.billabilityValue.name === 'Non Billable' ? '<span class="non-billable-badge" title="Non-billable">⊘</span>' : ''}
+          </div>
           <div class="log-meta text-secondary">
             <span class="badge badge-${session.mode}">${session.mode}</span>
             <span>${startTime} - ${endTime}</span>
             <span>• ${formatTimerDisplay(session.workDuration)}</span>
+            ${session.billabilityValue ? `<span>• ${this.escapeHtml(session.billabilityValue.name)}</span>` : ''}
           </div>
+          ${session.description ? `<div class="log-description text-secondary">${this.escapeHtml(session.description)}</div>` : ''}
         </div>
         <div class="log-actions">
           <button class="icon-btn edit-btn squircle-sm" data-id="${session.id}">✎</button>
@@ -127,6 +137,12 @@ export class SessionLogs {
         </div>
       </div>
     `;
+  }
+
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   attachStaticEvents() {

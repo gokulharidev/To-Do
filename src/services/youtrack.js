@@ -90,29 +90,119 @@ export class YouTrackService {
     }
 
     /**
-     * Get work item attributes for a project
+     * Get work item types (Activity, Development, etc.) for time tracking
+     * These are the types shown in the timesheet Type dropdown
      * @param {string} projectId 
      */
-    async getWorkItemAttributes(projectId) {
+    async getWorkItemTypes(projectId) {
         if (!this.isAuthenticated()) {
             throw new Error('YouTrack is not configured');
         }
 
         try {
-            // Try to fetch project-specific time tracking settings
-            // Note: The endpoint might vary based on YouTrack version. 
-            // We'll try the standard one for project time tracking settings.
+            console.log(`Fetching work item types for project: ${projectId}`);
             const response = await fetch(
-                `${this.apiUrl}/api/admin/projects/${projectId}/timeTrackingSettings/workItemAttributes?fields=id,name,values(id,name)`,
+                `${this.apiUrl}/api/admin/projects/${projectId}/timeTrackingSettings/workItemTypes?fields=id,name`,
                 { headers: this.getAuthHeaders() }
             );
 
             if (!response.ok) {
-                console.warn(`Failed to fetch work item attributes for project ${projectId}: ${response.status}`);
+                console.warn(`Failed to fetch work item types for project ${projectId}: ${response.status}`);
+                const errorText = await response.text();
+                console.warn('Error details:', errorText);
                 return [];
             }
 
-            return await response.json();
+            const types = await response.json();
+            console.log('Work item types response:', types);
+            return types.map(t => ({
+                id: t.id,
+                name: t.name
+            }));
+        } catch (error) {
+            console.error('Error fetching work item types:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get work item attributes for an issue by fetching an existing work item
+     * @param {string} issueId - Issue ID (e.g., "PROJ-123")
+     */
+    async getWorkItemAttributesForIssue(issueId) {
+        if (!this.isAuthenticated()) {
+            throw new Error('YouTrack is not configured');
+        }
+
+        try {
+            console.log(`Fetching work item attributes for issue: ${issueId}`);
+            
+            // Get the first work item to see what attributes are available
+            const response = await fetch(
+                `${this.apiUrl}/api/issues/${issueId}/timeTracking/workItems?fields=attributes(id,name,value(id,name))&$top=1`,
+                { headers: this.getAuthHeaders() }
+            );
+
+            if (!response.ok) {
+                console.warn(`Failed to fetch work items for ${issueId}: ${response.status}`);
+                return [];
+            }
+
+            const workItems = await response.json();
+            
+            if (workItems.length === 0) {
+                console.log('No existing work items found, cannot determine attributes');
+                return [];
+            }
+
+            const attributes = workItems[0].attributes || [];
+            
+            // For each attribute, we need to get possible values
+            // We'll collect unique values from multiple work items
+            const allWorkItemsResponse = await fetch(
+                `${this.apiUrl}/api/issues/${issueId}/timeTracking/workItems?fields=attributes(id,name,value(id,name))&$top=50`,
+                { headers: this.getAuthHeaders() }
+            );
+
+            if (allWorkItemsResponse.ok) {
+                const allWorkItems = await allWorkItemsResponse.json();
+                const attributeMap = new Map();
+
+                // Collect all unique attribute values
+                allWorkItems.forEach(item => {
+                    item.attributes?.forEach(attr => {
+                        if (!attributeMap.has(attr.id)) {
+                            attributeMap.set(attr.id, {
+                                id: attr.id,
+                                name: attr.name,
+                                values: []
+                            });
+                        }
+                        
+                        if (attr.value && attr.value.id) {
+                            const attrData = attributeMap.get(attr.id);
+                            const existingValue = attrData.values.find(v => v.id === attr.value.id);
+                            if (!existingValue) {
+                                attrData.values.push({
+                                    id: attr.value.id,
+                                    name: attr.value.name
+                                });
+                            }
+                        }
+                    });
+                });
+
+                const result = Array.from(attributeMap.values());
+                console.log('Work item attributes with values:', result);
+                return result;
+            }
+
+            return attributes.map(attr => ({
+                id: attr.id,
+                name: attr.name,
+                values: []
+            }));
+            
         } catch (error) {
             console.error('Error fetching work item attributes:', error);
             return [];
@@ -198,7 +288,7 @@ export class YouTrackService {
                 presentation: `${durationMinutes}m`
             },
             date: workDate.getTime(),
-            description: description || `Work tracked from focus timer`
+            text: description || `Work tracked from focus timer`  // YouTrack uses 'text' field
         };
 
         console.log(`Logging work item for date: ${workDate.toISOString()} (${workDate.toLocaleDateString()})`);
@@ -258,7 +348,8 @@ export class YouTrackService {
         }
 
         const description = session.description || session.taskName || `Work tracked from focus timer`;
-        const workItemAttributes = session.workItemAttributes || []; // Array of { id, value: { id } } or similar
+        const workItemType = session.workItemType || null; // Work item type (Activity, Development, etc.)
+        const billabilityValue = session.billabilityValue || null; // Billability attribute value { id, name }
 
         // YouTrack work item format
         const workItem = {
@@ -266,11 +357,16 @@ export class YouTrackService {
                 presentation: `${durationMinutes}m`
             },
             date: workDate.getTime(),
-            description: description,
-            attributes: workItemAttributes.map(attr => ({
-                id: attr.id,
-                value: attr.value
-            }))
+            text: description,  // YouTrack uses 'text' field for description
+            ...(workItemType && { type: { id: workItemType.id } }), // Add type if selected
+            ...(billabilityValue && {
+                attributes: [
+                    {
+                        id: '284-26', // Billability attribute ID
+                        value: { id: billabilityValue.id }
+                    }
+                ]
+            })
         };
 
         console.log(`Logging work item for date: ${workDate.toISOString()} (${workDate.toLocaleDateString()})`);
