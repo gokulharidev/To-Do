@@ -6,9 +6,11 @@ import {
   getTraditionalRemaining,
   isTraditionalWorkComplete,
   getBreakDuration,
-  createSession
+  createSession,
+  startBackgroundTimer,
+  stopBackgroundTimer
 } from '../utils/timerLogic.js';
-import { addSession } from '../utils/sessionStorage.js';
+import { addSession, updateSession } from '../utils/sessionStorage.js';
 import { breakMode } from '../services/breakMode.js';
 import { FlowSettingsModal } from './flowSettingsModal.js';
 import { getFlowBreakPercent, updateFlowBreakPercent } from '../utils/timerSettings.js';
@@ -24,6 +26,7 @@ export class SmartTimer {
     this.state = TIMER_STATES.IDLE;
     this.elapsed = 0;
     this.interval = null;
+    this.worker = null; // Web Worker for background timing
     this.taskName = '';
     this.startTime = null;
     this.workDuration = 0;
@@ -91,20 +94,6 @@ export class SmartTimer {
         ${this.mode === TIMER_MODES.FLOW && this.state === TIMER_STATES.IDLE ? this.getFlowSettings() : ''}
 
         <div class="input-group">
-          <label class="input-label">Type</label>
-          <select class="input squircle" id="timer-type" ${!this.selectedIssue || this.workItemTypes.length === 0 ? 'disabled' : ''}>
-            <option value="">${!this.selectedIssue ? 'Select an issue first' : this.workItemTypes.length === 0 ? 'Loading types...' : 'Select work type'}</option>
-            ${this.workItemTypes.map(type => `<option value="${type.id}" ${this.workItemType && this.workItemType.id === type.id ? 'selected' : ''}>${this.escapeHtml(type.name)}</option>`).join('')}
-          </select>
-          ${this.selectedIssue && this.selectedIssue.assignee ? `
-            <div class="issue-assignee">
-              <span class="assignee-label">Assigned to:</span>
-              <span class="assignee-name">${this.escapeHtml(this.selectedIssue.assignee)}</span>
-            </div>
-          ` : ''}
-        </div>
-
-        <div class="input-group">
           <label class="input-label">Issue / Task Name</label>
           <input 
             type="text" 
@@ -115,6 +104,20 @@ export class SmartTimer {
           />
           ${youtrackService.isAuthenticated() ? `
             <small class="text-muted">Start typing to search YouTrack issues</small>
+          ` : ''}
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Type</label>
+          <select class="input squircle" id="timer-type" ${!this.selectedIssue || this.workItemTypes.length === 0 ? 'disabled' : ''}>
+            <option value="">${!this.selectedIssue ? 'Select an issue first' : this.workItemTypes.length === 0 ? 'Loading types...' : 'Select work type'}</option>
+            ${this.workItemTypes.map(type => `<option value="${type.id}" ${this.workItemType && this.workItemType.id === type.id ? 'selected' : ''}>${this.escapeHtml(type.name)}</option>`).join('')}
+          </select>
+          ${this.selectedIssue && this.selectedIssue.assignee ? `
+            <div class="issue-assignee">
+              <span class="assignee-label">Assigned to:</span>
+              <span class="assignee-name">${this.escapeHtml(this.selectedIssue.assignee)}</span>
+            </div>
           ` : ''}
         </div>
 
@@ -260,22 +263,43 @@ export class SmartTimer {
           if (issue) {
             try {
               const [workItemTypes, attributes] = await Promise.all([
-                issue.project && issue.project.id 
+                issue.project && issue.project.id
                   ? youtrackService.getWorkItemTypes(issue.project.id)
                   : [],
                 youtrackService.getWorkItemAttributesForIssue(issue.id)
               ]);
-              
+
               console.log('Work item types loaded:', workItemTypes.length, workItemTypes);
               console.log('Work item attributes loaded:', attributes.length, attributes);
-              
+
               this.workItemTypes = workItemTypes;
               this.workItemAttributes = attributes;
-              
+
               // Find billability attribute
               this.billabilityAttribute = attributes.find(attr => attr.name === 'Billability');
+
+              // Fallback: If not found, create it
+              if (!this.billabilityAttribute) {
+                console.log('Billability attribute not found, creating default.');
+                this.billabilityAttribute = {
+                  id: '284-63', // Default ID
+                  name: 'Billability',
+                  values: []
+                };
+              }
+
               if (this.billabilityAttribute) {
-                console.log('Billability attribute found:', this.billabilityAttribute);
+                console.log('Billability attribute found/created:', this.billabilityAttribute);
+
+                // Inject default values if empty (Fallback)
+                if (!this.billabilityAttribute.values || this.billabilityAttribute.values.length === 0) {
+                  console.log('Injecting default Billability values');
+                  this.billabilityAttribute.values = [
+                    { name: 'Billable', id: 'placeholder-billable' },
+                    { name: 'Non-Billable', id: 'placeholder-non-billable' }
+                  ];
+                }
+
                 // Default to "Billable" if available
                 const billableValue = this.billabilityAttribute.values?.find(v => v.name === 'Billable');
                 if (billableValue) {
@@ -438,15 +462,15 @@ export class SmartTimer {
     this.render();
     this.attachEvents();
 
-    this.interval = setInterval(() => {
-      this.elapsed++;
+    // Use Web Worker for background timing
+    this.worker = startBackgroundTimer((seconds) => {
+      this.elapsed = seconds;
       this.updateDisplay();
-
       // Check if Traditional mode work is complete
       if (this.mode === TIMER_MODES.TRADITIONAL && isTraditionalWorkComplete(this.elapsed)) {
         this.triggerBreak();
       }
-    }, 1000);
+    });
   }
 
   stop() {
@@ -462,7 +486,8 @@ export class SmartTimer {
       endTime: new Date().toISOString(),
       description: this.description,
       workItemType: this.workItemType,
-      billabilityValue: this.selectedBillability // Billability attribute value
+      billabilityValue: this.selectedBillability, // Billability attribute value
+      billabilityAttributeId: this.billabilityAttribute ? this.billabilityAttribute.id : null
     });
 
     addSession(session);
@@ -475,7 +500,10 @@ export class SmartTimer {
 
       // Log the work item with type
       youtrackService.addWorkItemFromSession(session, this.selectedIssue.id)
-        .then(() => {
+        .then((result) => {
+          if (result && result.id) {
+            updateSession(session.id, { youtrackWorkItemId: result.id });
+          }
           console.log('Work item sent to YouTrack successfully');
           const typeInfo = this.workItemType ? ` (Type: ${this.workItemType.name})` : '';
           this.showNotification(`✓ Time logged to ${this.selectedIssue.idReadable} (${dateStr})${typeInfo}`, 'success');
@@ -493,7 +521,10 @@ export class SmartTimer {
         const dateStr = sessionDate.toLocaleDateString();
 
         youtrackService.addWorkItemFromSession(session, issueId)
-          .then(() => {
+          .then((result) => {
+            if (result && result.id) {
+              updateSession(session.id, { youtrackWorkItemId: result.id });
+            }
             console.log('Work item sent to YouTrack successfully');
             this.showNotification(`✓ Time logged to ${issueId} (${dateStr})`, 'success');
           })
@@ -529,14 +560,14 @@ export class SmartTimer {
     this.render();
     this.attachEvents();
 
-    this.interval = setInterval(() => {
-      this.elapsed++;
+    // Use Web Worker for background timing on resume
+    this.worker = startBackgroundTimer((seconds) => {
+      this.elapsed = seconds;
       this.updateDisplay();
-
       if (this.mode === TIMER_MODES.TRADITIONAL && isTraditionalWorkComplete(this.elapsed)) {
         this.triggerBreak();
       }
-    }, 1000);
+    });
   }
 
   cancel() {
@@ -548,6 +579,11 @@ export class SmartTimer {
     if (this.interval) {
       clearInterval(this.interval);
       this.interval = null;
+    }
+    // Terminate Web Worker if exists
+    if (this.worker) {
+      stopBackgroundTimer(this.worker);
+      this.worker = null;
     }
   }
 

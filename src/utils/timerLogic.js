@@ -41,10 +41,25 @@ export function formatTimerDisplay(seconds) {
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
 
-    if (hours > 0) {
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    // Always show HH:MM:SS for consistency
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Background timer using Web Worker
+export function startBackgroundTimer(callback) {
+    // Resolve worker path relative to this module
+    const worker = new Worker(new URL('../components/timerWorker.js', import.meta.url));
+    worker.onmessage = (e) => {
+        const seconds = e.data;
+        callback(seconds);
+    };
+    return worker;
+}
+
+export function stopBackgroundTimer(worker) {
+    if (worker) {
+        worker.terminate();
     }
-    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
 /**

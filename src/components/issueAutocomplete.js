@@ -1,6 +1,9 @@
 // Issue Autocomplete Component for YouTrack issue selection
 import { youtrackService } from '../services/youtrack.js';
 
+// Simple cache for issue search results (query -> issues array)
+const issueSearchCache = new Map();
+
 export class IssueAutocomplete {
     constructor(inputElement, onSelect) {
         this.inputElement = inputElement;
@@ -71,6 +74,12 @@ export class IssueAutocomplete {
             return;
         }
 
+        // Check cache first
+        if (issueSearchCache.has(query)) {
+            this.showResults(issueSearchCache.get(query));
+            return;
+        }
+
         // Debounce search
         this.searchTimeout = setTimeout(async () => {
             await this.searchIssues(query);
@@ -109,6 +118,9 @@ export class IssueAutocomplete {
             if (issues.length === 0) {
                 issues = await youtrackService.searchIssues(query, 10);
             }
+
+            // Cache the results for this query
+            issueSearchCache.set(query, issues);
 
             this.showResults(issues);
         } catch (error) {
@@ -269,5 +281,3 @@ export class IssueAutocomplete {
         clearTimeout(this.searchTimeout);
     }
 }
-
-

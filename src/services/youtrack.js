@@ -126,87 +126,52 @@ export class YouTrackService {
     }
 
     /**
-     * Get work item attributes for an issue by fetching an existing work item
-     * @param {string} issueId - Issue ID (e.g., "PROJ-123")
+     * Get work item attributes for a project
+     * @param {string} projectId 
      */
-    async getWorkItemAttributesForIssue(issueId) {
+    async getWorkItemAttributes(projectId) {
         if (!this.isAuthenticated()) {
             throw new Error('YouTrack is not configured');
         }
 
         try {
-            console.log(`Fetching work item attributes for issue: ${issueId}`);
-            
-            // Get the first work item to see what attributes are available
+            console.log(`Fetching work item attributes for project: ${projectId}`);
             const response = await fetch(
-                `${this.apiUrl}/api/issues/${issueId}/timeTracking/workItems?fields=attributes(id,name,value(id,name))&$top=1`,
+                `${this.apiUrl}/api/admin/projects/${projectId}/timeTrackingSettings/workItemAttributes?fields=id,name,values(id,name)`,
                 { headers: this.getAuthHeaders() }
             );
 
             if (!response.ok) {
-                console.warn(`Failed to fetch work items for ${issueId}: ${response.status}`);
+                console.warn(`Failed to fetch attributes for project ${projectId}: ${response.status}`);
                 return [];
             }
 
-            const workItems = await response.json();
-            
-            if (workItems.length === 0) {
-                console.log('No existing work items found, cannot determine attributes');
-                return [];
-            }
-
-            const attributes = workItems[0].attributes || [];
-            
-            // For each attribute, we need to get possible values
-            // We'll collect unique values from multiple work items
-            const allWorkItemsResponse = await fetch(
-                `${this.apiUrl}/api/issues/${issueId}/timeTracking/workItems?fields=attributes(id,name,value(id,name))&$top=50`,
-                { headers: this.getAuthHeaders() }
-            );
-
-            if (allWorkItemsResponse.ok) {
-                const allWorkItems = await allWorkItemsResponse.json();
-                const attributeMap = new Map();
-
-                // Collect all unique attribute values
-                allWorkItems.forEach(item => {
-                    item.attributes?.forEach(attr => {
-                        if (!attributeMap.has(attr.id)) {
-                            attributeMap.set(attr.id, {
-                                id: attr.id,
-                                name: attr.name,
-                                values: []
-                            });
-                        }
-                        
-                        if (attr.value && attr.value.id) {
-                            const attrData = attributeMap.get(attr.id);
-                            const existingValue = attrData.values.find(v => v.id === attr.value.id);
-                            if (!existingValue) {
-                                attrData.values.push({
-                                    id: attr.value.id,
-                                    name: attr.value.name
-                                });
-                            }
-                        }
-                    });
-                });
-
-                const result = Array.from(attributeMap.values());
-                console.log('Work item attributes with values:', result);
-                return result;
-            }
-
-            return attributes.map(attr => ({
-                id: attr.id,
-                name: attr.name,
-                values: []
-            }));
-            
+            const attributes = await response.json();
+            console.log('Work item attributes response:', attributes);
+            return attributes;
         } catch (error) {
             console.error('Error fetching work item attributes:', error);
             return [];
         }
+    }
+
+    /**
+     * Get work item attributes for an issue
+     * @param {string} issueId - Issue ID (e.g., "PROJ-123")
+     */
+    async getWorkItemAttributesForIssue(issueId) {
+        // First try to get project ID from issue
+        try {
+            const issue = await this.getIssue(issueId);
+            if (issue && issue.project && issue.project.id) {
+                return await this.getWorkItemAttributes(issue.project.id);
+            }
+        } catch (e) {
+            console.warn('Could not fetch issue details to get project ID', e);
+        }
+
+        // Fallback to existing logic if project ID not found (though unlikely if issue exists)
+        return [];
     }
 
     /**
@@ -359,15 +324,34 @@ export class YouTrackService {
             date: workDate.getTime(),
             text: description,  // YouTrack uses 'text' field for description
             ...(workItemType && { type: { id: workItemType.id } }), // Add type if selected
-            ...(billabilityValue && {
-                attributes: [
-                    {
-                        id: '284-26', // Billability attribute ID
-                        value: { id: billabilityValue.id }
-                    }
-                ]
-            })
         };
+
+        // Add attributes if present
+        if (billabilityValue) {
+            // We need the attribute ID. Since we don't have it stored in session, 
+            // we might need to fetch it or rely on a known ID.
+            // Ideally, the session should store the attribute ID too.
+            // For now, we'll try to find it if we have the attribute info, or fall back to the common ID.
+
+            // Note: In a real scenario, we should pass the attribute definition ID in the session.
+            // Assuming '284-26' is the ID for "Billability" in this project as per previous code.
+            // But we should try to be dynamic if possible.
+
+            // If the session has the attribute ID, use it.
+            const attributeId = session.billabilityAttributeId || '284-63';
+
+            // Check if ID is a placeholder
+            const valuePayload = billabilityValue.id && billabilityValue.id.startsWith('placeholder-')
+                ? { name: billabilityValue.name }
+                : { id: billabilityValue.id };
+
+            workItem.attributes = [
+                {
+                    id: attributeId,
+                    value: valuePayload
+                }
+            ];
+        }
 
         console.log(`Logging work item for date: ${workDate.toISOString()} (${workDate.toLocaleDateString()})`);
         console.log('Work Item Payload:', JSON.stringify(workItem, null, 2));
@@ -392,6 +376,69 @@ export class YouTrackService {
             return result;
         } catch (error) {
             console.error('Error adding work item:', error);
+            throw error;
+        }
+    }
+
+
+    /**
+     * Update an existing work item
+     * @param {string} issueId 
+     * @param {string} workItemId 
+     * @param {Object} data - { duration, date, description, workItemType, billabilityValue, billabilityAttributeId }
+     */
+    async updateWorkItem(issueId, workItemId, data) {
+        if (!this.isAuthenticated()) {
+            throw new Error('YouTrack is not configured');
+        }
+
+        const payload = {};
+
+        if (data.duration) {
+            payload.duration = { presentation: `${data.duration}m` };
+        }
+        if (data.date) {
+            payload.date = new Date(data.date).getTime();
+        }
+        if (data.description !== undefined) {
+            payload.text = data.description;
+        }
+        if (data.workItemType) {
+            payload.type = { id: data.workItemType.id };
+        }
+
+        if (data.billabilityValue) {
+            const attributeId = data.billabilityAttributeId || '284-63';
+
+            const valuePayload = data.billabilityValue.id && data.billabilityValue.id.startsWith('placeholder-')
+                ? { name: data.billabilityValue.name }
+                : { id: data.billabilityValue.id };
+
+            payload.attributes = [
+                {
+                    id: attributeId,
+                    value: valuePayload
+                }
+            ];
+        }
+
+        try {
+            const response = await fetch(
+                `${this.apiUrl}/api/issues/${issueId}/timeTracking/workItems/${workItemId}`,
+                {
+                    method: 'POST', // YouTrack uses POST for updates too (or PUT)
+                    headers: this.getAuthHeaders(),
+                    body: JSON.stringify(payload)
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`Failed to update work item: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error updating work item:', error);
             throw error;
         }
     }
