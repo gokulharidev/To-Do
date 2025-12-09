@@ -326,31 +326,27 @@ export class YouTrackService {
             ...(workItemType && { type: { id: workItemType.id } }), // Add type if selected
         };
 
-        // Add attributes if present
+        // Add attributes if present and we have an ID
         if (billabilityValue) {
-            // We need the attribute ID. Since we don't have it stored in session, 
-            // we might need to fetch it or rely on a known ID.
-            // Ideally, the session should store the attribute ID too.
-            // For now, we'll try to find it if we have the attribute info, or fall back to the common ID.
+            // We need the attribute ID. If it's not in the session, we cannot send it reliably.
+            // Sending a hardcoded ID for a project that doesn't have it causes 500 errors.
+            const attributeId = session.billabilityAttributeId;
 
-            // Note: In a real scenario, we should pass the attribute definition ID in the session.
-            // Assuming '284-26' is the ID for "Billability" in this project as per previous code.
-            // But we should try to be dynamic if possible.
+            if (attributeId) {
+                // Check if ID is a placeholder (new value created in UI but not real ID)
+                const valuePayload = billabilityValue.id && billabilityValue.id.startsWith('placeholder-')
+                    ? { name: billabilityValue.name }
+                    : { id: billabilityValue.id };
 
-            // If the session has the attribute ID, use it.
-            const attributeId = session.billabilityAttributeId || '284-63';
-
-            // Check if ID is a placeholder
-            const valuePayload = billabilityValue.id && billabilityValue.id.startsWith('placeholder-')
-                ? { name: billabilityValue.name }
-                : { id: billabilityValue.id };
-
-            workItem.attributes = [
-                {
-                    id: attributeId,
-                    value: valuePayload
-                }
-            ];
+                workItem.attributes = [
+                    {
+                        id: attributeId,
+                        value: valuePayload
+                    }
+                ];
+            } else {
+                console.warn('Skipping Billability: No attribute ID provided in session. Project might not support it.');
+            }
         }
 
         console.log(`Logging work item for date: ${workDate.toISOString()} (${workDate.toLocaleDateString()})`);
@@ -408,18 +404,23 @@ export class YouTrackService {
         }
 
         if (data.billabilityValue) {
-            const attributeId = data.billabilityAttributeId || '284-63';
+            // Only send attribute if we have a valid ID
+            const attributeId = data.billabilityAttributeId;
 
-            const valuePayload = data.billabilityValue.id && data.billabilityValue.id.startsWith('placeholder-')
-                ? { name: data.billabilityValue.name }
-                : { id: data.billabilityValue.id };
+            if (attributeId) {
+                const valuePayload = data.billabilityValue.id && data.billabilityValue.id.startsWith('placeholder-')
+                    ? { name: data.billabilityValue.name }
+                    : { id: data.billabilityValue.id };
 
-            payload.attributes = [
-                {
-                    id: attributeId,
-                    value: valuePayload
-                }
-            ];
+                payload.attributes = [
+                    {
+                        id: attributeId,
+                        value: valuePayload
+                    }
+                ];
+            } else {
+                console.warn('Skipping Billability in update: No attribute ID provided. Project might not support it.');
+            }
         }
 
         try {
