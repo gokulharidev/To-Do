@@ -2,6 +2,7 @@
 import { getSessionsByDate, updateSession, deleteSession } from '../utils/sessionStorage.js';
 import { formatTimerDisplay } from '../utils/timerLogic.js';
 import { youtrackService } from '../services/youtrack.js';
+import { escapeHtml } from '../utils/escapeHtml.js';
 
 export class SessionLogs {
   constructor(container) {
@@ -140,10 +141,9 @@ export class SessionLogs {
     `;
   }
 
+  // Use shared escapeHtml utility - keeping method signature for compatibility
   escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return escapeHtml(text);
   }
 
   attachStaticEvents() {

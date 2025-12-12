@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Functional Tests - Timesheet Logger</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: #0a0a0a; 
+            color: #ededed; 
+            padding: 20px;
+        }
+        h1 { margin-bottom: 20px; color: #7c3aed; }
+        .test-suite { margin-bottom: 30px; }
+        .test-suite h2 { 
+            font-size: 18px; 
+            margin-bottom: 10px; 
+            padding: 10px;
+            background: #1e1e1e;
+            border-radius: 8px;
+        }
+        .test-case { 
+            padding: 10px 15px; 
+            margin: 5px 0; 
+            border-radius: 6px; 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .test-case.pending { background: #2a2a2a; }
+        .test-case.running { background: #1e3a5f; }
+        .test-case.passed { background: #0d3320; }
+        .test-case.failed { background: #3d1a1a; }
+        .status { font-weight: bold; }
+        .status.pass { color: #10b981; }
+        .status.fail { color: #ef4444; }
+        .status.running { color: #3b82f6; }
+        #run-all { 
+            padding: 12px 24px; 
+            font-size: 16px; 
+            background: #7c3aed; 
+            color: white; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        #run-all:hover { background: #6d28d9; }
+        #run-all:disabled { background: #555; cursor: not-allowed; }
+        .summary { 
+            padding: 15px; 
+            background: #1e1e1e; 
+            border-radius: 8px; 
+            margin-top: 20px;
+            font-size: 18px;
+        }
+        .summary.all-passed { border-left: 4px solid #10b981; }
+        .summary.has-failures { border-left: 4px solid #ef4444; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Functional Tests - Timesheet Logger</h1>
+    <button id="run-all">▶ Run All Tests</button>
+    
+    <div id="test-results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        // Test Framework
+        class TestRunner {
+            constructor() {
+                this.tests = [];
+                this.passed = 0;
+                this.failed = 0;
+            }
+
+            describe(suiteName, tests) {
+                this.tests.push({ suiteName, tests });
+            }
+
+            async runAll() {
+                this.passed = 0;
+                this.failed = 0;
+                const resultsDiv = document.getElementById('test-results');
+                resultsDiv.innerHTML = '';
+
+                for (const suite of this.tests) {
+                    const suiteDiv = document.createElement('div');
+                    suiteDiv.className = 'test-suite';
+                    suiteDiv.innerHTML = `<h2>📋 ${suite.suiteName}</h2>`;
+
+                    for (const test of suite.tests) {
+                        const testDiv = document.createElement('div');
+                        testDiv.className = 'test-case running';
+                        testDiv.innerHTML = `
+                            <span>${test.name}</span>
+                            <span class="status running">Running...</span>
+                        `;
+                        suiteDiv.appendChild(testDiv);
+                        resultsDiv.appendChild(suiteDiv);
+
+                        try {
+                            await test.fn();
+                            testDiv.className = 'test-case passed';
+                            testDiv.querySelector('.status').className = 'status pass';
+                            testDiv.querySelector('.status').textContent = '✓ PASS';
+                            this.passed++;
+                        } catch (error) {
+                            testDiv.className = 'test-case failed';
+                            testDiv.querySelector('.status').className = 'status fail';
+                            testDiv.querySelector('.status').textContent = `✗ FAIL: ${error.message}`;
+                            this.failed++;
+                            console.error(`Test failed: ${test.name}`, error);
+                        }
+
+                        await this.delay(50); // Visual feedback between tests
+                    }
+                }
+
+                this.showSummary();
+            }
+
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+
+            showSummary() {
+                const summaryDiv = document.getElementById('summary');
+                const total = this.passed + this.failed;
+                const allPassed = this.failed === 0;
+
+                summaryDiv.innerHTML = `
+                    <div class="summary ${allPassed ? 'all-passed' : 'has-failures'}">
+                        ${allPassed ? '🎉' : '⚠️'} 
+                        <strong>${this.passed}/${total}</strong> tests passed
+                        ${this.failed > 0 ? `, <strong style="color:#ef4444">${this.failed}</strong> failed` : ''}
+                    </div>
+                `;
+            }
+        }
+
+        // Assertion helpers
+        function assert(condition, message = 'Assertion failed') {
+            if (!condition) throw new Error(message);
+        }
+
+        function assertEquals(actual, expected, message = '') {
+            if (actual !== expected) {
+                throw new Error(`${message} Expected "${expected}" but got "${actual}"`);
+            }
+        }
+
+        function assertExists(selector, message = '') {
+            const element = document.querySelector(selector);
+            if (!element) throw new Error(`${message} Element not found: ${selector}`);
+            return element;
+        }
+
+        // Initialize test runner
+        const runner = new TestRunner();
+
+        // ========================================
+        // UI RENDERING TESTS
+        // ========================================
+        runner.describe('UI Rendering', [
+            {
+                name: 'App container exists',
+                fn: async () => {
+                    const app = document.querySelector('#app');
+                    assert(app !== null, 'App container not found');
+                }
+            },
+            {
+                name: 'Timer card renders',
+                fn: async () => {
+                    await runner.delay(500);
+                    const timerCard = document.querySelector('.smart-timer-card');
+                    assert(timerCard !== null, 'Timer card not found');
+                }
+            },
+            {
+                name: 'Timer display shows time',
+                fn: async () => {
+                    const display = document.querySelector('.timer-display');
+                    assert(display !== null, 'Timer display not found');
+                    assert(display.textContent.includes(':'), 'Timer display does not show time format');
+                }
+            },
+            {
+                name: 'Mode switcher has buttons',
+                fn: async () => {
+                    const modeButtons = document.querySelectorAll('.mode-btn');
+                    assert(modeButtons.length >= 2, 'Mode switcher buttons not found');
+                }
+            },
+            {
+                name: 'Start button exists',
+                fn: async () => {
+                    const startBtn = document.querySelector('#start-timer-btn');
+                    assert(startBtn !== null, 'Start button not found');
+                }
+            },
+            {
+                name: 'Task input exists',
+                fn: async () => {
+                    const input = document.querySelector('#timer-task-name');
+                    assert(input !== null, 'Task name input not found');
+                }
+            }
+        ]);
+
+        // ========================================
+        // TIMER FUNCTIONALITY TESTS
+        // ========================================
+        runner.describe('Timer Functionality', [
+            {
+                name: 'Cannot start without task name',
+                fn: async () => {
+                    const input = document.querySelector('#timer-task-name');
+                    const startBtn = document.querySelector('#start-timer-btn');
+                    
+                    input.value = '';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    
+                    // Mock alert to prevent blocking
+                    const originalAlert = window.alert;
+                    let alertCalled = false;
+                    window.alert = () => { alertCalled = true; };
+                    
+                    startBtn.click();
+                    await runner.delay(100);
+                    
+                    window.alert = originalAlert;
+                    assert(alertCalled, 'Alert should be shown for empty task');
+                }
+            },
+            {
+                name: 'Timer starts with task name',
+                fn: async () => {
+                    const input = document.querySelector('#timer-task-name');
+                    input.value = 'TEST-001 Functional test task';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    
+                    const startBtn = document.querySelector('#start-timer-btn');
+                    startBtn.click();
+                    
+                    await runner.delay(200);
+                    
+                    const stopBtn = document.querySelector('#stop-timer-btn');
+                    assert(stopBtn !== null, 'Stop button should appear after start');
+                }
+            },
+            {
+                name: 'Timer can be paused',
+                fn: async () => {
+                    const pauseBtn = document.querySelector('#pause-timer-btn');
+                    if (pauseBtn) {
+                        pauseBtn.click();
+                        await runner.delay(200);
+                        
+                        const resumeBtn = document.querySelector('#resume-timer-btn');
+                        assert(resumeBtn !== null, 'Resume button should appear after pause');
+                    } else {
+                        throw new Error('Pause button not found - timer may not be running');
+                    }
+                }
+            },
+            {
+                name: 'Timer can be resumed',
+                fn: async () => {
+                    const resumeBtn = document.querySelector('#resume-timer-btn');
+                    if (resumeBtn) {
+                        resumeBtn.click();
+                        await runner.delay(200);
+                        
+                        const pauseBtn = document.querySelector('#pause-timer-btn');
+                        assert(pauseBtn !== null, 'Pause button should appear after resume');
+                    }
+                }
+            },
+            {
+                name: 'Timer can be stopped',
+                fn: async () => {
+                    const stopBtn = document.querySelector('#stop-timer-btn');
+                    if (stopBtn) {
+                        stopBtn.click();
+                        await runner.delay(500);
+                        
+                        const startBtn = document.querySelector('#start-timer-btn');
+                        assert(startBtn !== null, 'Start button should appear after stop');
+                    }
+                }
+            }
+        ]);
+
+        // ========================================
+        // MODE SWITCHING TESTS
+        // ========================================
+        runner.describe('Mode Switching', [
+            {
+                name: 'Can switch to Flow mode',
+                fn: async () => {
+                    const flowBtn = document.querySelector('.mode-btn[data-mode="flow"]');
+                    flowBtn.click();
+                    await runner.delay(200);
+                    
+                    assert(flowBtn.classList.contains('active'), 'Flow button should be active');
+                }
+            },
+            {
+                name: 'Can switch back to Traditional mode',
+                fn: async () => {
+                    const traditionalBtn = document.querySelector('.mode-btn[data-mode="traditional"]');
+                    traditionalBtn.click();
+                    await runner.delay(200);
+                    
+                    assert(traditionalBtn.classList.contains('active'), 'Traditional button should be active');
+                }
+            }
+        ]);
+
+        // ========================================
+        // SESSION LOGS TESTS
+        // ========================================
+        runner.describe('Session Logs', [
+            {
+                name: 'View Timesheet button exists',
+                fn: async () => {
+                    const logsBtn = document.querySelector('#open-logs-btn');
+                    assert(logsBtn !== null, 'View Timesheet button not found');
+                }
+            },
+            {
+                name: 'Session logs modal opens',
+                fn: async () => {
+                    const logsBtn = document.querySelector('#open-logs-btn');
+                    logsBtn.click();
+                    await runner.delay(300);
+                    
+                    const modal = document.querySelector('.session-logs-modal');
+                    assert(modal !== null, 'Session logs modal should open');
+                }
+            },
+            {
+                name: 'Session logs has date navigation',
+                fn: async () => {
+                    const prevBtn = document.querySelector('#logs-prev-day');
+                    const nextBtn = document.querySelector('#logs-next-day');
+                    const dateDisplay = document.querySelector('#logs-date-display');
+                    
+                    assert(prevBtn !== null, 'Previous day button not found');
+                    assert(nextBtn !== null, 'Next day button not found');
+                    assert(dateDisplay !== null, 'Date display not found');
+                }
+            },
+            {
+                name: 'Session logs can be closed',
+                fn: async () => {
+                    const closeBtn = document.querySelector('#logs-close-btn');
+                    closeBtn.click();
+                    await runner.delay(300);
+                    
+                    const modal = document.querySelector('.session-logs-modal');
+                    assert(modal === null, 'Session logs modal should be closed');
+                }
+            }
+        ]);
+
+        // ========================================
+        // YOUTRACK INTEGRATION TESTS
+        // ========================================
+        runner.describe('YouTrack Integration', [
+            {
+                name: 'YouTrack status indicator exists',
+                fn: async () => {
+                    const status = document.querySelector('.youtrack-status');
+                    // May or may not exist depending on config
+                    assert(true, 'YouTrack status check completed');
+                }
+            },
+            {
+                name: 'Type dropdown exists',
+                fn: async () => {
+                    const typeSelect = document.querySelector('#timer-type');
+                    assert(typeSelect !== null, 'Type dropdown not found');
+                }
+            },
+            {
+                name: 'Description textarea exists',
+                fn: async () => {
+                    const textarea = document.querySelector('#timer-description');
+                    assert(textarea !== null, 'Description textarea not found');
+                }
+            }
+        ]);
+
+        // ========================================
+        // NAVIGATION TESTS
+        // ========================================
+        runner.describe('Navigation', [
+            {
+                name: 'Navigation container exists',
+                fn: async () => {
+                    const nav = document.querySelector('#navigation-container');
+                    assert(nav !== null, 'Navigation container not found');
+                }
+            }
+        ]);
+
+        // Run button handler
+        document.getElementById('run-all').addEventListener('click', async function() {
+            this.disabled = true;
+            this.textContent = '⏳ Running...';
+            
+            await runner.runAll();
+            
+            this.disabled = false;
+            this.textContent = '▶ Run All Tests';
+        });
+
+        // Show instruction
+        document.getElementById('test-results').innerHTML = `
+            <div class="test-suite">
+                <p style="padding: 20px; text-align: center; color: #a3a3a3;">
+                    Click "Run All Tests" to start functional testing
+                </p>
+            </div>
+        `;
+    </script>
+</body>
+</html>

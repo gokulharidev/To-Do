@@ -4,6 +4,7 @@ import { Navigation } from './components/navigation.js';
 import { TimePage } from './pages/timePage.js';
 import { CalendarPage } from './pages/calendarPage.js';
 import { taskScheduler } from './services/taskScheduler.js';
+import { testRunner } from './components/testRunner.js';
 
 class App {
   constructor() {
@@ -16,6 +17,7 @@ class App {
       <div id="navigation-container"></div>
       <div id="time-container"></div>
       <div id="calendar-container"></div>
+      <button id="open-tests-btn" title="Run Functional Tests">🧪</button>
     `;
 
     // Initialize pages
@@ -43,6 +45,11 @@ class App {
       // Start timer with task
       timePage.startTask(task);
     });
+
+    // Test button handler
+    document.querySelector('#open-tests-btn').addEventListener('click', () => {
+      testRunner.open();
+    });
   }
 }
 
@@ -54,3 +61,4 @@ if (document.readyState === 'loading') {
 } else {
   new App();
 }
+

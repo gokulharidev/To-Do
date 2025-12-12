@@ -16,6 +16,7 @@ import { FlowSettingsModal } from './flowSettingsModal.js';
 import { getFlowBreakPercent, updateFlowBreakPercent } from '../utils/timerSettings.js';
 import { youtrackService } from '../services/youtrack.js';
 import { IssueAutocomplete } from './issueAutocomplete.js';
+import { escapeHtml } from '../utils/escapeHtml.js';
 
 export class SmartTimer {
   constructor(container, onSessionAdded, onOpenLogs) {
@@ -42,12 +43,8 @@ export class SmartTimer {
     this.billabilityAttribute = null; // Billability attribute definition with values
     this.selectedBillability = null; // Selected billability value { id, name }
 
-    // Helper method to escape HTML
-    this.escapeHtml = (text) => {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    };
+    // Use shared escapeHtml utility
+    this.escapeHtml = escapeHtml;
 
     this.render();
     this.attachEvents();

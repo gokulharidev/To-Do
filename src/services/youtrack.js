@@ -31,6 +31,30 @@ export class YouTrackService {
     }
 
     /**
+     * Internal fetch helper with common error handling
+     * @param {string} endpoint - API endpoint (without base URL)
+     * @param {Object} options - Fetch options (method, body, etc.)
+     * @returns {Promise<Object>} - Parsed JSON response
+     */
+    async _fetch(endpoint, options = {}) {
+        if (!this.isAuthenticated()) {
+            throw new Error('YouTrack is not configured');
+        }
+
+        const response = await fetch(`${this.apiUrl}${endpoint}`, {
+            ...options,
+            headers: this.getAuthHeaders()
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API error: ${response.status} ${response.statusText}. ${errorText}`);
+        }
+
+        return response.json();
+    }
+
+    /**
      * Test connection to YouTrack
      */
     async testConnection() {
