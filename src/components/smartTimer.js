@@ -560,14 +560,14 @@ export class SmartTimer {
     this.render();
     this.attachEvents();
 
-    // Use Web Worker for background timing on resume
+    // Use Web Worker for background timing on resume - PASS CURRENT ELAPSED TIME
     this.worker = startBackgroundTimer((seconds) => {
       this.elapsed = seconds;
       this.updateDisplay();
       if (this.mode === TIMER_MODES.TRADITIONAL && isTraditionalWorkComplete(this.elapsed)) {
         this.triggerBreak();
       }
-    });
+    }, this.elapsed);  // Pass current elapsed time to preserve it
   }
 
   cancel() {
@@ -613,14 +613,15 @@ export class SmartTimer {
       this.render();
       this.attachEvents();
 
-      this.interval = setInterval(() => {
-        this.elapsed++;
+      // Use Web Worker for consistent timing (instead of setInterval which drifts)
+      this.worker = startBackgroundTimer((seconds) => {
+        this.elapsed = seconds;
         this.updateDisplay();
 
         if (isTraditionalWorkComplete(this.elapsed)) {
           this.triggerBreak();
         }
-      }, 1000);
+      }, 0);  // Start from 0 for new work session
     } else {
       // Flow mode: return to idle after break
       this.reset();

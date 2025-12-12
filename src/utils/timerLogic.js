@@ -46,13 +46,15 @@ export function formatTimerDisplay(seconds) {
 }
 
 // Background timer using Web Worker
-export function startBackgroundTimer(callback) {
+export function startBackgroundTimer(callback, startSeconds = 0) {
     // Resolve worker path relative to this module
     const worker = new Worker(new URL('../components/timerWorker.js', import.meta.url));
     worker.onmessage = (e) => {
         const seconds = e.data;
         callback(seconds);
     };
+    // Send start command with initial elapsed time
+    worker.postMessage({ command: 'start', startSeconds });
     return worker;
 }
 
